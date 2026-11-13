@@ -248,6 +248,100 @@ class UnMixMix:
         return (_audio(mix.contiguous(), sr),)
 
 
-NODE_CLASS_MAPPINGS = {"UnMixBandIt": UnMixBandIt, "UnMixMix": UnMixMix}
+
+# ----------------------------------------------------------------------------- voice splitting
+
+
+def format_timeline(segs) -> str:
+    return "\n".join(f"{a:.2f}-{b:.2f} voice {v + 1}" for a, b, v in segs)
+
+
+def parse_timeline(text: str, duration: float, n_voices: int):
+    """Turn lines like '0.0-4.5 voice 1' into [(start, end, voice_index)]. Raises ValueError on a bad line."""
+    import re
+    pat = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*(?:-|\u2013|to)\s*(\d+(?:\.\d+)?)\s*[,:]?\s*(?:voice\s*)?(\d)\s*$", re.I)
+    segs = []
+    for n, line in enumerate(text.splitlines(), 1):
+        if not line.strip():
+            continue
+        m = pat.match(line)
+        if not m:
+            raise ValueError(f"Correction line {n} isn't understood: '{line.strip()}'. "
+                             "Use the same form as the timeline output, like: 0.00-4.50 voice 1")
+        a, b, v = float(m.group(1)), float(m.group(2)), int(m.group(3))
+        if not 1 <= v <= n_voices:
+            raise ValueError(f"Correction line {n}: voice {v} is outside 1 to {n_voices}. "
+                             "Raise num_voices if you need more voices.")
+        if b <= a:
+            raise ValueError(f"Correction line {n}: the end time must be after the start time.")
+        segs.append((a, min(b, duration), v - 1))
+    if not segs:
+        raise ValueError("The corrections box has no usable lines.")
+    segs.sort()
+    return segs
+
+
+class UnMixSplitVoices:
+    """Optional: split a voices track into one track per speaker."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "audio": ("AUDIO", {"tooltip": "A voices track, for example the voices output of the Un-Mix node."}),
+                "num_voices": ("INT", {"default": 2, "min": 2, "max": 4, "step": 1,
+                                       "tooltip": "How many different speakers there are."}),
+            },
+            "optional": {
+                "corrections": ("STRING", {"multiline": True, "default": "",
+                                           "tooltip": "Leave empty to let the node decide. To fix mistakes, paste the "
+                                                      "timeline output here, edit it, and run again."}),
+            }}
+
+    RETURN_TYPES = ("AUDIO", "AUDIO", "AUDIO", "AUDIO", "STRING")
+    RETURN_NAMES = ("voice_1", "voice_2", "voice_3", "voice_4", "timeline")
+    FUNCTION = "run"
+    CATEGORY = "audio/Un-Mix-a-Lot"
+    DESCRIPTION = ("Splits a voices track into one track per speaker. Works best with different people or "
+                   "different AI voices; one person doing several voices is hard to tell apart. "
+                   "The tracks add back up to the original exactly.")
+
+    def run(self, audio, num_voices, corrections=""):
+        from . import voices
+        voices.ensure_packages()
+        wave, sr = audio["waveform"], int(audio["sample_rate"])
+        b, c, t = wave.shape
+        n = int(num_voices)
+        outs = [[] for _ in range(4)]
+        lines = []
+        for i in range(b):
+            mono = _resample(wave[i].float().mean(0).cpu(), sr, SR).numpy().astype(np.float32)
+            dur = len(mono) / SR
+            if corrections and corrections.strip():
+                segs = parse_timeline(corrections, dur, n)
+                _, segs = voices.apply_segments(mono, segs, n)
+            else:
+                _, segs = voices.split(mono, n)
+            masks, _ = voices.apply_segments(np.ones(len(mono), np.float32), segs, n)  # the mattes: they sum to 1
+            lines.append(format_timeline(segs) if b == 1 else f"[item {i + 1}]\n" + format_timeline(segs))
+            for k in range(4):
+                if k < len(masks):
+                    m = torch.from_numpy(masks[k])[None, None, :]
+                    m = torch.nn.functional.interpolate(m, size=t, mode="linear", align_corners=False)[0]  # [1, t]
+                else:
+                    m = torch.zeros(1, t)
+                outs[k].append(m)
+            # keep the exact sum: put whatever is left on the last used voice
+            used = len(masks)
+            rest = 1.0 - sum(outs[k][-1] for k in range(used))
+            outs[used - 1][-1] = outs[used - 1][-1] + rest
+        res = []
+        for k in range(4):
+            m = torch.stack(outs[k])  # [b, 1, t]
+            res.append(_audio((wave.float() * m).contiguous(), sr))
+        return (*res, "\n".join(lines))
+
+NODE_CLASS_MAPPINGS = {"UnMixBandIt": UnMixBandIt, "UnMixSplitVoices": UnMixSplitVoices, "UnMixMix": UnMixMix}
 NODE_DISPLAY_NAME_MAPPINGS = {"UnMixBandIt": "Un-Mix: Voices / Music / Effects (BandIt v2)",
+                              "UnMixSplitVoices": "Un-Mix: Split voices (optional)",
                               "UnMixMix": "Un-Mix: Mix stems"}
