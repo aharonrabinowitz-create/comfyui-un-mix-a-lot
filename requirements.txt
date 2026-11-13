@@ -1,0 +1,4 @@
+# ComfyUI already provides these. Listed for reference only; the node does not change your PyTorch.
+torch
+torchaudio
+numpy
