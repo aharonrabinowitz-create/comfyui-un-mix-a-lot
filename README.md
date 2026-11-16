@@ -24,7 +24,7 @@ Then **restart ComfyUI**. Double-click the canvas and search for "Un-Mix" to che
 
 The first time you run the node it downloads the BandIt v2 model (about 447 MB) into `ComfyUI/models/un_mix_a_lot/`. After that it works offline.
 
-**About ComfyUI-Manager:** the current Manager window in ComfyUI does not offer "Install via Git URL", and the older Manager interface blocks Git URL installs at its default security setting. So use one of the two options above.
+**About ComfyUI-Manager:** the current Manager window in ComfyUI Desktop does not offer "Install via Git URL". ComfyUI's notes say the older Manager interface can do it, but that its default security setting blocks Git installs. We haven't tested that route, so use one of the two options above.
 
 ## The nodes
 
