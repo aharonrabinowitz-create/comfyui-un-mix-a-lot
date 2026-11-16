@@ -10,17 +10,21 @@ Free software provided **"as is", with no warranty of any kind**. Separation is 
 
 ## Install
 
-**With ComfyUI-Manager:** Install via Git URL, paste this repo's address, then restart ComfyUI.
+Pick **one** of these. Both were tested with ComfyUI Desktop (Windows).
 
-**By hand:** open a terminal in `ComfyUI/custom_nodes` and run
+**Option 1: with git.** Open a terminal in your ComfyUI `custom_nodes` folder and run
 
 ```
 git clone https://github.com/aharonrabinowitz-create/comfyui-un-mix-a-lot.git
 ```
 
-then restart ComfyUI. There is nothing else to install: the nodes use the PyTorch and torchaudio that ComfyUI already has.
+**Option 2: without git.** On this page click **Code, then Download ZIP**. Extract the ZIP into your ComfyUI `custom_nodes` folder. The extracted folder (it will be called `comfyui-un-mix-a-lot-main`) must have `__init__.py` directly inside it, not another folder in between.
+
+Then **restart ComfyUI**. Double-click the canvas and search for "Un-Mix" to check that the nodes are there. There is nothing else to install: the nodes use the PyTorch and torchaudio that ComfyUI already has.
 
 The first time you run the node it downloads the BandIt v2 model (about 447 MB) into `ComfyUI/models/un_mix_a_lot/`. After that it works offline.
+
+**About ComfyUI-Manager:** the current Manager window in ComfyUI does not offer "Install via Git URL", and the older Manager interface blocks Git URL installs at its default security setting. So use one of the two options above.
 
 ## The nodes
 
